@@ -37,4 +37,7 @@ s32 Swi_MLoad(u32 arg0, u32 arg1, u32 arg2, u32 arg3);
 extern SwiFunc SwiTable[];
 extern void    SwiVector(void);
 
+int8_t RetreiveHaiParams(u16 id, void* data, void* size);
+void dummyCall();
+
 #endif

@@ -38,6 +38,7 @@
 #include "timer.h"
 #include "tools.h"
 #include "types.h"
+#include "swi.h"
 
 #define DEBUG_MODE DEBUG_NONE
 //#define DEBUG_MODE DEBUG_BUFFER
@@ -48,6 +49,93 @@
 char *moduleName = "MLOAD";
 s32 offset       = 0;
 u32 stealth_mode = 1;     // Stealth mode is on by default
+
+void __PatchSyscalls()
+{
+	uint32_t zeros[] = {0,0};
+	//the target address for the new syscall tables is immediately after the HAI parameters
+	const uint16_t* paramAddress = 0xfffff004;
+	uint16_t paramSize = *paramAddress;
+	uint8_t* syscallTarget = ((uint8_t*)paramAddress) + paramSize + 4;
+	//ios.syscallBase should be populated by now
+	uint32_t stackArgsBase = ios.syscallBase + 0x7A*sizeof(uint32_t);
+	//if this version of IOS has less than 0x7A syscalls, leftover space will remain 0
+	//for now ignore
+	__MemCopy(syscallTarget, (void*)ios.syscallBase, 0x7A*sizeof(uint32_t));
+	//next 8 bytes are for our syscalls
+	void* func = RetreiveHaiParams;
+	*(uint32_t*)(syscallTarget+(0x7A*sizeof(uint32_t))) = (uint32_t)func;
+	func = dummyCall;
+	*(uint32_t*)(syscallTarget+(0x7B*sizeof(uint32_t))) = (uint32_t)func;
+	DCFlushRange(syscallTarget+(0x7A)*(sizeof(uint32_t)), 8);
+	//next copy over the stack arguments table
+	__MemCopy(0,syscallTarget + 0x7C*sizeof(uint32_t), (uint32_t*)ios.syscallBase+0x7A, 0x7A*sizeof(uint32_t));
+	//number of stack arguments for both new new syscalls is 0
+	*(uint32_t*)(syscallTarget+(0x7A+0x7C)*(sizeof(uint32_t))) = 0;
+	*(uint32_t*)(syscallTarget+(0x7A+0x7C+1)*(sizeof(uint32_t))) = 0;
+	DCFlushRange(syscallTarget+(0x7A+0x7C)*(sizeof(uint32_t)), 8);
+	//patch ios syscall handler to use the new syscall tables and increase the maximum syscall number
+	//first find the syscall handler routine
+	uint8_t* kernelBase = 0xffff0000;
+	uint8_t pattern[] = {0xE9, 0xCD, 0x7F, 0xFF, 0xE1, 0x4F, 0x80, 0x00};
+	for (uint8_t* index = kernelBase; index < (uint8_t*)0xffff9000; index+=4)
+	{
+		if(!memcmp(pattern, index, 32)) //syscall handler found
+		{
+			//max syscall index is at offset 0x33 from here
+			DCWRITE8(index+0x33, 0x7C);
+			//the syscall table offset is loaded at offset 0x70
+			//the last 12 bits constain the offset and the 7th bit determines whether to add or subtract the offset
+			//remember to add 8 to the offset
+			uint16_t offset = (*(uint16_t*)(index+0x72) && 0x0fff) + 0x8;
+			bool add = !!(*(uint32_t*)(index+0x70) && 0x02000000);
+			uint32_t* syscallAddress = (uint32_t*)(index+0x70 - offset + 2*add*offset);
+			if (*syscallAddress == ios.syscallBase)
+			{
+				*syscallAddress = syscallTarget;
+			}
+			else
+			{
+				//search the next 0x1000 bytes for the correct offset
+				for (int i = 0; i < 0x400; i++)
+				{
+					syscallAddress = (uint32_t*)(index+0x70)+i;
+					if (*syscallAddress == ios.syscallBase)
+					{
+						*syscallAddress = syscallTarget;
+						break;
+					}
+				}
+			}
+			//syscall stack arg counts is at offset 0x48
+			offset = (*(uint16_t*)(index+0x4A) && 0x0fff) + 0x8;
+			add = !!(*(uint32_t*)(index+0x48) && 0x02000000);
+			uint32_t* stackAddress = (uint32_t*)(index+0x48 - offset + 2*add*offset);
+			if (*stackAddress == stackArgsBase)
+			{
+				*stackAddress = syscallTarget+0x7C*sizeof(uint32_t);
+			}
+			else
+			{
+				//search the next 0x1000 bytes for the correct offset
+				for (int i = 0; i < 0x400; i++)
+				{
+					stackAddress = (uint32_t*)(index+0x70)+i;
+					if (*stackAddress == stackArgsBase)
+					{
+						*stackAddress = (uint32_t*)(syscallTarget+0x7C*sizeof(uint32_t));
+						break;
+					}
+				}
+			}
+			//alternatively only move the stack args table, the two new syscall addresses can then be directly appended to the original table
+
+			//optionally patch all syscalls to load a new IOS kernel to a custom handler
+			break;
+		}
+	}
+	
+}
 
 
 static s32 __MLoad_Ioctlv(u32 cmd, ioctlv *vector, u32 inlen, u32 iolen)
@@ -219,7 +307,15 @@ static patcher moduleDetectors[] = {
 s32 __MLoad_System(void)
 {
 	/* Detect modules and patch swi vector */
-	return IOS_PatchModules(moduleDetectors, sizeof(moduleDetectors));
+	s32 result = IOS_PatchModules(moduleDetectors, sizeof(moduleDetectors));
+	//apply HAI-IOS patches when HAI parameters are detected
+	const uint8_t* HAI_ADDRESS = 0xfffff000;
+	uint8_t magic[4] = {'H','A','I',0x00};
+	if (*(uint32_t*)HAI_ADDRESS == *(uint32_t*)magic)
+	{
+		__PatchSyscalls();
+	}
+	return result;
 }
 
 static s32 __MLoad_Initialize(u32 *queuehandle)

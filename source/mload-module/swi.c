@@ -204,3 +204,43 @@ s32 Swi_Handler(u32 arg0, u32 arg1, u32 arg2, u32 arg3)
 
 	return 0;
 }
+
+int8_t RetreiveHaiParams(u16 id, void* data, void* size)
+{
+	//for simplicity, assume both pointers reference valid memory locations
+	const uint8_t* HAI_ADDRESS = (uint8_t*)0xfffff000;
+	uint8_t magic[4] = {'H','A','I',0x00};
+	//first check that the HAI params are present by checking for the magic word HAI
+	if (*(uint32_t*)HAI_ADDRESS != *(uint32_t*)magic)
+	{
+		return -1;
+	}
+	//loop until the appropriate param is found
+	uint16_t totalSize = *(uint16_t*)(HAI_ADDRESS+4);
+	uint16_t numParams = *(uint16_t*)(HAI_ADDRESS+6);
+	uint8_t* offset = (uint8_t*)0xffff0008;
+	for (int i = 0; i < numParams; i++)
+	{
+		uint16_t curr_id = *(uint16_t*)offset;
+		offset += 2;
+		uint16_t curr_size = *(uint16_t*)offset;
+		offset += 2;
+		if (curr_id == id)
+		{
+			__MemCopy(0,size, &curr_size,sizeof(uint16_t));
+			__MemCopy(0,data, offset, curr_size);
+			return 0;
+		}
+		else
+		{
+			offset += curr_size;
+		}
+	}
+
+	return -1;
+}
+
+void dummyCall() //syscall added in HAI-IOS for some reason
+{
+	return;
+}

@@ -33,6 +33,8 @@
 #include "syscalls.h"
 #include "types.h"
 
+#define LOADER 0
+
 /* Constants */
 #define ES_SIG_RSA4096		0x10000
 #define ES_SIG_RSA2048		0x10001
@@ -349,6 +351,46 @@ s32 ES_EmulateOpen(ipcmessage *message)
 
 	/* Initialize ES (stage 2) */
 	if (!stage2_done) {
+
+		//the primary IOS is stored in /shared1/cios.app
+		//launch it while retaining the version stored here
+		if (LOADER)
+		{
+			char path[] = "/shared1/cios.app";
+			s32 version = os_kernel_get_version();
+			os_ios_boot(path, false, version);
+		}
+		//this is expected to be called from the loader
+		//no modules not embedded in the kernel binary should be loaded at this point
+		//load all modules, independently of the installed IOS
+		//contents will be stored at /cios/*.app and are expected to be obtained from NUS downloader
+		char path_prototype[] = "/cios/00000000.app";
+		char modules[] = "12456789abcd";
+		int i;
+		for (i = 0; i < 12; i++)
+		{
+			char cur_char = modules[i];
+			path_prototype[16] = cur_char;
+			os_launch_rm(path_prototype);
+		}
+		//load in the other d2x cios modules
+		//this one (ES plugin) and mload are embedded directly into the kernel
+		os_launch_rm("/cios/DIPP.app");
+		os_launch_rm("/cios/EHCI.app");
+		os_launch_rm("/cios/FAT.app");
+		os_launch_rm("/cios/FFSP.app");
+		//os_launch_rm("/cios/SDHC.app"); d2x revision does not have SDHC module
+
+		//os_launch_rm("/shared1/USBS.app"); not used in IOS 56 base
+		//use HAI-IOS's OHCI1 module to add gamepad support
+		char path1[] = "/cios/HAI_OHCI1.app";
+		os_launch_rm(path1);
+		//optionally launch fakemote
+
+		//once fakemote can process gamepad inputs, it will be loaded to facilitate using the gamepad concurrently with standard controllers
+
+		//TODO: ensure that IOS reloads are always blocked
+		//reloads will instead load the original kernel and set the listed version to the requested version of IOS
 		s32 tid, ret;
 
 		/* Enable ios reload block */
@@ -453,7 +495,8 @@ s32 ES_EmulateIoctlv(ipcmessage *message)
 			}
 
 			/* Fake IOS launch */
-			if (config.fakelaunch != 0 && tidl >= 3 && tidl <= 255) {
+			//this should be unconditionally enabled
+			if (1) //(config.fakelaunch != 0 && tidl >= 3 && tidl <= 255) {
 
 				/* Reload the cIOS in place of the requested IOS */
 				if (config.title_id == 0) {
@@ -475,8 +518,16 @@ s32 ES_EmulateIoctlv(ipcmessage *message)
 						/* Save ES config */
 						Config_Save(&config, sizeof(config));
 
-						/* Launch title (fake ID) */
-						return __ES_CustomLaunch(tidh, config.ios);
+						 /* Save ES config */
+						 Config_Save(&config, sizeof(config));
+						 char path[] = "/shared1/cios.app";
+						 s32 version = os_kernel_get_version();
+						 return os_ios_boot(path, false, version);
+
+						 //TODO: after the reload, update the revision information to match the one listed for the requested IOS version
+
+						/* Launch title (fake ID) old */
+						//return __ES_CustomLaunch(tidh, config.ios);
 					}
 
 					/* Reset title ID */
