@@ -496,7 +496,8 @@ s32 ES_EmulateIoctlv(ipcmessage *message)
 
 			/* Fake IOS launch */
 			//this should be unconditionally enabled
-			if (1) //(config.fakelaunch != 0 && tidl >= 3 && tidl <= 255) {
+			if (1) //(config.fakelaunch != 0 && tidl >= 3 && tidl <= 255) 
+			{
 
 				/* Reload the cIOS in place of the requested IOS */
 				if (config.title_id == 0) {

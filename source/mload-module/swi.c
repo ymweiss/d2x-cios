@@ -211,7 +211,7 @@ int8_t RetreiveHaiParams(u16 id, void* data, void* size)
 	const uint8_t* HAI_ADDRESS = (uint8_t*)0xfffff000;
 	uint8_t magic[4] = {'H','A','I',0x00};
 	//first check that the HAI params are present by checking for the magic word HAI
-	if (*(uint32_t*)HAI_ADDRESS != *(uint32_t*)magic)
+	if (memcmp(magic,HAI_ADDRESS,4))
 	{
 		return -1;
 	}
@@ -219,7 +219,8 @@ int8_t RetreiveHaiParams(u16 id, void* data, void* size)
 	uint16_t totalSize = *(uint16_t*)(HAI_ADDRESS+4);
 	uint16_t numParams = *(uint16_t*)(HAI_ADDRESS+6);
 	uint8_t* offset = (uint8_t*)0xffff0008;
-	for (int i = 0; i < numParams; i++)
+	int i;
+	for (i = 0; i < numParams; i++)
 	{
 		uint16_t curr_id = *(uint16_t*)offset;
 		offset += 2;
