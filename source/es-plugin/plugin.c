@@ -398,14 +398,6 @@ s32 ES_EmulateOpen(ipcmessage *message)
 
 		//load OH1 or the HAI-IOS version based on whether the load HAI parameters system call works
 		u8 test[8];
-		if (!os_get_hai_parameters(0x300,test,test+4))
-		{
-			os_launch_rm("/cios/HAI_OH1.app");
-		}
-		else
-		{
-			os_launch_rm("/cios/OH1.app");
-		}
 		s32 tid, ret;
 
 		/* Enable ios reload block (this is only needed when the ios was not previously reloaded) */
@@ -415,9 +407,20 @@ s32 ES_EmulateOpen(ipcmessage *message)
 
 			/* Get kernel version */
 			kver = os_kernel_get_version();
-
+			if (config.requested_ios != 0)
+			{
+				os_kernel_set_version((config.requested_ios << 16) || (kver && 0x00ff));
+			}
 			/* Set fake ios launch */
 			__ES_SetFakeIosLaunch(1, (kver >> 16) & 0xFF);
+		}
+		else
+		{
+			if (config.requested_ios != 0)
+			{
+				s32 kver = os_kernel_get_version();
+				os_kernel_set_version((config.requested_ios << 16) || (kver && 0x00ff));
+			}
 		}
 
 		/*set kernel version to the one requested*/
