@@ -92,6 +92,7 @@
 	syscall 0x50, os_set_dvd_video_mode
 	syscall 0x54, os_set_ahbprot
 	syscall 0x5a os_launch_rm
+	syscall 0x7a os_get_hai_parameters
 
 
 /*

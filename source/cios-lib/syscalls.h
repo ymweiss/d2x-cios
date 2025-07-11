@@ -86,6 +86,7 @@ s32   os_ios_boot(const char *path, u32 flag, u32 version);
 s32   os_launch_rm(const char *path);
 s32   os_kernel_set_version(u32 version);
 s32   os_kernel_get_version(void);
+s32   os_get_hai_parameters(s16 id, void* param, void* size);
 void  os_get_key(s32 keyid, void *out);
 void *os_virt_to_phys(void *ptr);
 

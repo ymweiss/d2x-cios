@@ -38,6 +38,9 @@ struct esConfig {
 
 	/* title_id to be launched in place of the system menu */
 	u64 sm_title_id;
+
+	/*ios requested to be launched*/
+	u32 requested_ios;
 };
 
 /* Prototypes */

@@ -354,6 +354,8 @@ s32 ES_EmulateOpen(ipcmessage *message)
 
 		//the primary IOS is stored in /shared1/cios.app
 		//launch it while retaining the version stored here
+		//new plan is to use the kernel binary as fw.img
+		/*
 		if (LOADER)
 		{
 			char path[] = "/shared1/cios.app";
@@ -385,16 +387,30 @@ s32 ES_EmulateOpen(ipcmessage *message)
 		//use HAI-IOS's OHCI1 module to add gamepad support
 		char path1[] = "/cios/HAI_OHCI1.app";
 		os_launch_rm(path1);
+		*/
 		//optionally launch fakemote
 
 		//once fakemote can process gamepad inputs, it will be loaded to facilitate using the gamepad concurrently with standard controllers
 
 		//TODO: ensure that IOS reloads are always blocked
 		//reloads will instead load the original kernel and set the listed version to the requested version of IOS
+
+
+		//load OH1 or the HAI-IOS version based on whether the load HAI parameters system call works
+		u8 test[8];
+		if (!os_get_hai_parameters(0x300,test,test+4))
+		{
+			os_launch_rm("/cios/HAI_OH1.app");
+		}
+		else
+		{
+			os_launch_rm("/cios/OH1.app");
+		}
 		s32 tid, ret;
 
-		/* Enable ios reload block */
-		if (config.title_id == 0) {
+		/* Enable ios reload block (this is only needed when the ios was not previously reloaded) */
+		if (config.title_id == 0) 
+		{
 			s32 kver;
 
 			/* Get kernel version */
@@ -402,6 +418,15 @@ s32 ES_EmulateOpen(ipcmessage *message)
 
 			/* Set fake ios launch */
 			__ES_SetFakeIosLaunch(1, (kver >> 16) & 0xFF);
+		}
+
+		/*set kernel version to the one requested*/
+		if (config.requested_ios > 0)
+		{
+			if (config.requested_ios <= 0xFF) //this should be the case
+			os_kernel_set_version(config.requested_ios);
+			else
+			os_kernel_set_version(config.requested_ios >> 16);
 		}
 
 		/* Get current thread id */
@@ -500,12 +525,16 @@ s32 ES_EmulateIoctlv(ipcmessage *message)
 			{
 
 				/* Reload the cIOS in place of the requested IOS */
-				if (config.title_id == 0) {
+				if (1) //(config.title_id == 0) {
+				{
 					s32 ret;
 
 					/* Get title ID */
 					ret = __ES_GetTitleID(&config.title_id);
-					if (ret >= 0 && IS_DISC_BASED_GAME(config.title_id)) {
+					if (1) //(ret >= 0 && IS_DISC_BASED_GAME(config.title_id)) 
+					{
+						/*set ES config for the requested IOS version (stored in tidl)*/
+						config.requested_ios = tidl;
 
 						/* Set ES status for stealth mode */
 						Swi_SetEsRequest(1);
@@ -518,17 +547,15 @@ s32 ES_EmulateIoctlv(ipcmessage *message)
 
 						/* Save ES config */
 						Config_Save(&config, sizeof(config));
-
-						 /* Save ES config */
-						 Config_Save(&config, sizeof(config));
+						/*
 						 char path[] = "/shared1/cios.app";
 						 s32 version = os_kernel_get_version();
 						 return os_ios_boot(path, false, version);
-
+						/*
 						 //TODO: after the reload, update the revision information to match the one listed for the requested IOS version
 
-						/* Launch title (fake ID) old */
-						//return __ES_CustomLaunch(tidh, config.ios);
+						/* Launch title (fake ID) */
+						return __ES_CustomLaunch(tidh, config.ios);
 					}
 
 					/* Reset title ID */
