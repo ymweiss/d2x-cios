@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ciosmaps ciosgroupscount="1">
 	<ciosgroup name="d2x-v${MAJOR_VER}-${MINOR_VER}" version="${IOS_REV}" basescount="4">
-		<base ios="38" version="4380" contentscount="21" modulescount="6">
+		<base ios="38" version="4380" contentscount="20" modulescount="6">
 			<content id="0x0" patchscount="7">
 				<!-- cIOS signature fields -->
 				<patch offset="0x00" size="4"  originalbytes="0x66,0x69,0x72,0x6d" newbytes="0x1e,0xe7,0xc1,0x05"/>
@@ -18,7 +18,6 @@
 				<patch offset="0x719" size="1" originalbytes="0x01" newbytes="0x00"/>
 			</content>
 			<content id="0x2" />
-			<content id="0x3" />
 			<content id="0x4" />
 			<content id="0x5" />
 			<content id="0x6" />
@@ -33,14 +32,14 @@
 				<!-- Reroute IRQ9 to mload -->
 				<patch offset="0x26510" size="4" originalbytes="0xFF,0xFF,0x5A,0xF2" newbytes="0x13,0x6D,0x00,0x11"/>
 			</content>
-			<content id="0xf" module="MLOAD" tmdmoduleid="-1"/>
+			<content id="0x3" module="MLOAD" tmdmoduleid="-1"/>
 			<content id="0x10" module="FAT" tmdmoduleid="-1"/>
 			<content id="0x11" module="EHCI" tmdmoduleid="3"/>
 			<content id="0x12" module="DIPP" tmdmoduleid="-1"/>
 			<content id="0x13" module="ES" tmdmoduleid="-1"/>
-			<content id="0x14" module="FFSP" tmdmoduleid="-1"/>
+			<content id="0xf" module="FFSP" tmdmoduleid="-1"/>
 		</base>
-		<base ios="56" version="5918" contentscount="21" modulescount="6">
+		<base ios="56" version="5918" contentscount="20" modulescount="6">
 			<content id="0x0" patchscount="7">
 				<!-- cIOS signature fields -->
 				<patch offset="0x00" size="4"  originalbytes="0x66,0x69,0x72,0x6d" newbytes="0x1e,0xe7,0xc1,0x05"/>
@@ -57,7 +56,6 @@
 				<patch offset="0x775" size="1" originalbytes="0x01" newbytes="0x00"/>
 			</content>
 			<content id="0x2" />
-			<content id="0x3" />
 			<content id="0x4" />
 			<content id="0x5" />
 			<content id="0x6" />
@@ -76,14 +74,14 @@
 				<!-- Korean key -->
 				<patch offset="0x28EE8" size="16" originalbytes="0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00" newbytes="0x63,0xB8,0x2B,0xB4,0xF4,0x61,0x4E,0x2E,0x13,0xF2,0xFE,0xFB,0xBA,0x4C,0x9B,0x7E"/>
 			</content>
-			<content id="0x19" module="MLOAD" tmdmoduleid="-1"/>
+			<content id="0x3" module="MLOAD" tmdmoduleid="-1"/>
 			<content id="0x1a" module="FAT" tmdmoduleid="-1"/>
 			<content id="0x1b" module="EHCI" tmdmoduleid="3"/>
 			<content id="0x1c" module="DIPP" tmdmoduleid="-1"/>
 			<content id="0x1d" module="ES" tmdmoduleid="-1"/>
-			<content id="0x1e" module="FFSP" tmdmoduleid="-1"/>
+			<content id="0x10" module="FFSP" tmdmoduleid="-1"/>
 		</base>
-		<base ios="57" version="6175" contentscount="25" modulescount="6">
+		<base ios="57" version="6175" contentscount="24" modulescount="6">
 			<content id="0x0" patchscount="7">
 				<patch offset="0x00" size="4"  originalbytes="0x66,0x69,0x72,0x6d" newbytes="0x1e,0xe7,0xc1,0x05"/>
 				<patch offset="0x04" size="4"  originalbytes="0x77,0x61,0x72,0x65" newbytes="0x00,0x00,0x00,0x01"/>
@@ -99,7 +97,6 @@
 				<patch offset="0x775" size="1" originalbytes="0x01" newbytes="0x00"/>
 			</content>
 			<content id="0x2" />
-			<content id="0x3" />
 			<content id="0x4" />
 			<content id="0x5" />
 			<content id="0x6" />
@@ -122,14 +119,14 @@
 				<!-- Korean key -->
 				<patch offset="0x28EE8" size="16" originalbytes="0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00" newbytes="0x63,0xB8,0x2B,0xB4,0xF4,0x61,0x4E,0x2E,0x13,0xF2,0xFE,0xFB,0xBA,0x4C,0x9B,0x7E"/>
 			</content>
-			<content id="0x1d" module="MLOAD" tmdmoduleid="-1"/>
+			<content id="0x3" module="MLOAD" tmdmoduleid="-1"/>
 			<content id="0x1e" module="FAT" tmdmoduleid="-1"/>
 			<content id="0x1f" module="EHCI" tmdmoduleid="2"/>
 			<content id="0x20" module="DIPP" tmdmoduleid="-1"/>
 			<content id="0x21" module="ES" tmdmoduleid="-1"/>
-			<content id="0x22" module="FFSP" tmdmoduleid="-1"/>
+			<content id="0x21d" module="FFSP" tmdmoduleid="-1"/>
 		</base>
-		<base ios="58" version="6432" contentscount="25" modulescount="6">
+		<base ios="58" version="6432" contentscount="24" modulescount="6">
 			<content id="0x0" patchscount="7">
 				<!-- cIOS signature fields -->
 				<patch offset="0x00" size="4"  originalbytes="0x66,0x69,0x72,0x6d" newbytes="0x1e,0xe7,0xc1,0x05"/>
@@ -146,7 +143,6 @@
 				<patch offset="0x6E5" size="1" originalbytes="0x01" newbytes="0x00"/>
 				<patch offset="0x775" size="1" originalbytes="0x01" newbytes="0x00"/>
 			</content>
-			<content id="0x3" />
 			<content id="0x4" />
 			<content id="0x5" />
 			<content id="0x6" />
@@ -169,12 +165,13 @@
 				<!-- Korean key -->
 				<patch offset="0x28EE8" size="16" originalbytes="0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00" newbytes="0x63,0xB8,0x2B,0xB4,0xF4,0x61,0x4E,0x2E,0x13,0xF2,0xFE,0xFB,0xBA,0x4C,0x9B,0x7E"/>
 			</content>
-			<content id="0x18" module="MLOAD" tmdmoduleid="-1"/>
+			<content id="0x3" module="MLOAD" tmdmoduleid="-1"/>
 			<content id="0x19" module="FAT" tmdmoduleid="-1"/>
 			<content id="0x1a" module="USBS" tmdmoduleid="-1"/>
 			<content id="0x1b" module="DIPP" tmdmoduleid="-1"/>
 			<content id="0x1c" module="ES" tmdmoduleid="-1"/>
-			<content id="0x1d" module="FFSP" tmdmoduleid="-1"/>
+			<content id="0x10" module="FFSP" tmdmoduleid="-1"/>
 		</base>
 	</ciosgroup>
+
 </ciosmaps>
