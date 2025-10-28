@@ -31,6 +31,11 @@
 #include "tid.h"
 #include "types.h"
 
+// HAI parameter addresses
+#define HAI_MAGIC_ADDRESS    0xfffff000
+#define HAI_PARAM_SIZE_ADDR  0xfffff004
+#define HAI_PARAMS_DATA_ADDR 0xfffff008
+
 s32 running_title = 0;
 s32 es_request    = 0;
 
@@ -208,7 +213,7 @@ s32 Swi_Handler(u32 arg0, u32 arg1, u32 arg2, u32 arg3)
 int8_t RetreiveHaiParams(u16 id, void* data, void* size)
 {
 	//for simplicity, assume both pointers reference valid memory locations
-	const uint8_t* HAI_ADDRESS = (uint8_t*)0xfffff000;
+	const uint8_t* HAI_ADDRESS = (uint8_t*)HAI_MAGIC_ADDRESS;
 	uint8_t magic[4] = {'H','A','I',0x00};
 	//first check that the HAI params are present by checking for the magic word HAI
 	if (memcmp(magic,HAI_ADDRESS,4))
@@ -216,9 +221,9 @@ int8_t RetreiveHaiParams(u16 id, void* data, void* size)
 		return -1;
 	}
 	//loop until the appropriate param is found
-	uint16_t totalSize = *(uint16_t*)(HAI_ADDRESS+4);
-	uint16_t numParams = *(uint16_t*)(HAI_ADDRESS+6);
-	uint8_t* offset = (uint8_t*)0xffff0008;
+	uint16_t totalSize = *(uint16_t*)HAI_PARAM_SIZE_ADDR;
+	uint16_t numParams = *(uint16_t*)(HAI_MAGIC_ADDRESS+6);
+	uint8_t* offset = (uint8_t*)HAI_PARAMS_DATA_ADDR;
 	int i;
 	for (i = 0; i < numParams; i++)
 	{

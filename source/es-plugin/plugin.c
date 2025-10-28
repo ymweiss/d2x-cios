@@ -209,6 +209,42 @@ static s32 __ES_GetTicketView(u32 tidh, u32 tidl, u8 *view)
 	return 0;
 }
 
+static s32 __ES_GetIOSVersion(u32 ios_number, u32 *version)
+{
+	static u8 buffer[1024] ATTRIBUTE_ALIGN(32);
+
+	char path[ISFS_MAXPATH];
+	s32  fd, ret;
+	tmd *titleMetaData;
+
+	/* Generate TMD path for IOS, forcing real nand access with '#' */
+	ES_snprintf(path, sizeof(path), "#title/00000001/%08x/content/title.tmd", ios_number);
+
+	/* Open TMD */
+	fd = os_open(path, 1);
+	if (fd < 0)
+		return fd;
+
+	/* Read TMD header (signature + tmd structure) */
+	ret = os_read(fd, buffer, sizeof(buffer));
+
+	/* Close TMD */
+	os_close(fd);
+
+	/* Read error */
+	if (ret < 0)
+		return ret;
+
+	/* Get TMD pointer (skip signature) */
+	titleMetaData = (tmd *)SIGNATURE_PAYLOAD(buffer);
+
+	/* Extract title version */
+	if (version)
+		*version = titleMetaData->title_version;
+
+	return 0;
+}
+
 static s32 __ES_CustomLaunch(u32 tidh, u32 tidl)
 {
 	static tikview view ATTRIBUTE_ALIGN(32) = { 0 };
@@ -401,35 +437,58 @@ s32 ES_EmulateOpen(ipcmessage *message)
 		s32 tid, ret;
 
 		/* Enable ios reload block (this is only needed when the ios was not previously reloaded) */
-		if (config.title_id == 0) 
+		if (config.title_id == 0)
 		{
 			s32 kver;
 
 			/* Get kernel version */
 			kver = os_kernel_get_version();
-			if (config.requested_ios != 0)
+
+			/* Set kernel version to requested IOS if configured */
+			if (config.requested_ios != 0 && config.requested_ios <= 0xFF)
 			{
-				os_kernel_set_version((config.requested_ios << 16) || (kver && 0x00ff));
+				u32 ios_version = 0;
+				s32 ret;
+
+				/* Query the actual version from the requested IOS TMD */
+				ret = __ES_GetIOSVersion(config.requested_ios, &ios_version);
+				if (ret >= 0)
+				{
+					/* Use the actual version from the requested IOS */
+					os_kernel_set_version((config.requested_ios << 16) | (ios_version & 0xFFFF));
+				}
+				else
+				{
+					/* Fallback: use current minor version if TMD read fails */
+					os_kernel_set_version((config.requested_ios << 16) | (kver & 0xFFFF));
+				}
 			}
+
 			/* Set fake ios launch */
 			__ES_SetFakeIosLaunch(1, (kver >> 16) & 0xFF);
 		}
 		else
 		{
-			if (config.requested_ios != 0)
+			/* Set kernel version to requested IOS if configured */
+			if (config.requested_ios != 0 && config.requested_ios <= 0xFF)
 			{
-				s32 kver = os_kernel_get_version();
-				os_kernel_set_version((config.requested_ios << 16) || (kver && 0x00ff));
-			}
-		}
+				u32 ios_version = 0;
+				s32 ret;
 
-		/*set kernel version to the one requested*/
-		if (config.requested_ios > 0)
-		{
-			if (config.requested_ios <= 0xFF) //this should be the case
-			os_kernel_set_version(config.requested_ios);
-			else
-			os_kernel_set_version(config.requested_ios >> 16);
+				/* Query the actual version from the requested IOS TMD */
+				ret = __ES_GetIOSVersion(config.requested_ios, &ios_version);
+				if (ret >= 0)
+				{
+					/* Use the actual version from the requested IOS */
+					os_kernel_set_version((config.requested_ios << 16) | (ios_version & 0xFFFF));
+				}
+				else
+				{
+					/* Fallback: use current minor version if TMD read fails */
+					s32 kver = os_kernel_get_version();
+					os_kernel_set_version((config.requested_ios << 16) | (kver & 0xFFFF));
+				}
+			}
 		}
 
 		/* Get current thread id */

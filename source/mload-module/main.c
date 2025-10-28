@@ -44,82 +44,186 @@
 //#define DEBUG_MODE DEBUG_BUFFER
 //#define DEBUG_MODE DEBUG_GECKO
 
+// HAI parameter addresses
+#define HAI_MAGIC_ADDRESS    0xfffff000
+#define HAI_PARAM_SIZE_ADDR  0xfffff004
+#define HAI_PARAMS_DATA_ADDR 0xfffff008
+
+//IOS56 pattern to find and replace
+static const u16 old_dev_fs_main[] = {
+	0xD009,
+	0x68A0,
+	0xF7FF,
+	0x2800,
+	0xD104,
+	0x1C20,
+	0xF7FF,
+	0x1C01,
+	0xE038,
+	0x6823,
+	0x2B01,
+	0xD009,
+	0x68A0,
+	0xF7FA,
+	0x2800,
+	0xD104,
+};
+
+
+static const u16 new_dev_fs_main[] = {
+	0xD00c,
+	0x6823,
+	0xF7FF,
+	0x2800,
+	0xD103,
+	0xE005,
+	0xF7FF,
+	0x1C01,
+	0xE038,
+	0x6823,
+	0x2B01,
+	0xD009,
+	0x68A0,
+	0xF7FA,
+	0x2800,
+	0xD1ed,
+};
+
+
+
+//find and replace directly
+static const u16 old_dev_fs_open_flash[] = {
+	0xB510,
+	0x2005,
+	0x4240,
+	0x2100,
+	0x4C07,
+	0x00CB,
+	0x191A,
+	0x6813,
+	0x2B00,
+	0xD103,
+	0x2301,
+	0x6013,
+	0x1C10,
+	0xE002,
+	0x3101,
+	0x2901,
+	0xD9F3,
+	0xBC10,
+	0xBC02,
+	0x4708,
+	0x2004, 
+    0x9C44,
+	0xB500,
+	0x1C02
+};
+
+static const u16 new_dev_fs_open_flash[] = {
+/* 200051FC */ 0xB500,     // push {lr}
+               0x4809,     // ldr r0, =dev_flash_fds
+               0x2200,     // movs r2, #0
+               0x2B06,     // cmp r3, #6 (ipc_ioctl)
+/* 20005204 */ 0xD105,     // bne 20005212
+               0x68E1,     // ldr r1, [r4, 0xC] (ipcmsg.ioctl.cmd)
+               0x296F,     // cmp r1, #0x6F (111)
+/* 2000520A */ 0xD007,     // beq 2000521C
+               0x2201,     // movs r2, #1
+               0x2964,     // cmp r1, #0x64 (100)
+/* 20005210 */ 0xD004,     // beq 2000521C
+/* 20005212 */ 0x6800,     // ldr r0, [r0]
+               0x2801,     // cmp r0, #1
+/* 20005216 */ 0xD103,     // bne 2000521E
+/* 20005218 */ 0x4803,     // ldr r0, =_FS_ioctl_ret+1
+               0x4700,     // bx r0
+/* 2000521C */ 0x6002,     // str r2, [r0]
+               0x2001,     // movs r0, #1
+/* 20005220 */ 0xBC04,     // pop {r2}
+               0x4710,     // bx r2
+/* 20005224 */ 0x0000,     // dev_flash_fds  (unmodified)
+               0x0000,     //                (unmodified)
+/* 20005228 */ 0x1374,     // _FS_ioctl_ret_
+               0x001C+1    // _FS_ioctl_ret_+1 (thumb)
+};
+
 
 /* Global variables */
 char *moduleName = "MLOAD";
 s32 offset       = 0;
 u32 stealth_mode = 1;     // Stealth mode is on by default
 
-void __PatchSyscalls()
+uint32_t stackBuffer[0x7C]; //use to store the relocated stack arguments count
+s32 hai_patch_result = 0; // Store result of HAI patching: 0=success, negative=error
+int __PatchSyscalls()
 {
-	uint32_t zeros[] = {0,0};
 	//the target address for the new syscall tables is immediately after the HAI parameters
-	const uint16_t* paramAddress = (uint16_t*)0xfffff004;
+	const uint16_t* paramAddress = (uint16_t*)HAI_PARAM_SIZE_ADDR;
 	uint16_t paramSize = *paramAddress;
 	uint8_t* syscallTarget = ((uint8_t*)paramAddress) + paramSize + 4;
-	//ios.syscallBase should be populated by now
+
 	uint32_t stackArgsBase = ios.syscallBase + 0x7A*sizeof(uint32_t);
-	//if this version of IOS has less than 0x7A syscalls, leftover space will remain 0
-	//for now ignore
-	memcpy(syscallTarget, (void*)ios.syscallBase, 0x7A*sizeof(uint32_t));
-	//next 8 bytes are for our syscalls
-	void* func = RetreiveHaiParams;
-	*(uint32_t*)(syscallTarget+(0x7A*sizeof(uint32_t))) = (uint32_t)func;
-	func = dummyCall;
-	*(uint32_t*)(syscallTarget+(0x7B*sizeof(uint32_t))) = (uint32_t)func;
-	//DCFlushRange(syscallTarget+(0x7A)*(sizeof(uint32_t)), 8);
-	//next copy over the stack arguments table
-	memcpy(syscallTarget + 0x7C*sizeof(uint32_t), (uint32_t*)ios.syscallBase+0x7A, 0x7A*sizeof(uint32_t));
-	//number of stack arguments for both new new syscalls is 0
-	*(uint32_t*)(syscallTarget+(0x7A+0x7C)*(sizeof(uint32_t))) = 0;
-	*(uint32_t*)(syscallTarget+(0x7A+0x7C+1)*(sizeof(uint32_t))) = 0;
-	//flush entire cache range
-	DCFlushRange(syscallTarget, 4*2*0x7C);
+
+	memcpy(stackBuffer, (void*)stackArgsBase, 4*0x7A);
+	DCWrite32(stackBuffer+0x7A,0);
+	DCWrite32(stackBuffer+0x7B,0);
+	if (memcmp((void*)stackArgsBase,stackBuffer,4*0x7A) != 0)
+	{
+		return -1; // Error: stackBuffer memcpy failed
+	}
+	//the original location of the stack args can be overwritten by the new syscall addresses
+	DCWrite32((void*)stackArgsBase,RetreiveHaiParams);
+	DCWrite32((void*)(stackArgsBase+4),dummyCall);
 	//DCFlushRange(syscallTarget+(0x7A+0x7C)*(sizeof(uint32_t)), 8);
 	//patch ios syscall handler to use the new syscall tables and increase the maximum syscall number
 	//first find the syscall handler routine
 	uint8_t* kernelBase = (uint8_t*)0xffff0000;
 	uint8_t pattern[] = {0xE9, 0xCD, 0x7F, 0xFF, 0xE1, 0x4F, 0x80, 0x00};
 	uint8_t* index;
+	if (ios.syscallBase == 0)
+	{
+		return -2; // Error: ios.syscallBase is 0
+	}
+
 	for (index = kernelBase; index < (uint8_t*)0xffff9000; index+=4)
 	{
-		if(!memcmp(pattern, index, 32)) //syscall handler found
+		if(!memcmp(pattern, index, sizeof(pattern))) //syscall handler found
 		{
 			//max syscall index is at offset 0x33 from here
-			DCWrite8(index+0x33, 0x7C);
-			//the syscall table offset is loaded at offset 0x70
-			//the last 12 bits constain the offset and the 7th bit determines whether to add or subtract the offset
-			//remember to add 8 to the offset
-			uint16_t offset = (*(uint16_t*)(index+0x72) && 0x0fff) + 0x8;
-			bool add = !!(*(uint32_t*)(index+0x70) && 0x02000000);
-			uint32_t* syscallAddress = (uint32_t*)(index+0x70 - offset + 2*add*offset);
-			if (*syscallAddress == ios.syscallBase)
+			//should be E3 5A 00 7A
+			bool syscall_max_patched = false;
+			if (*(index+0x33) == 0x7A)
 			{
-				DCWrite32(syscallAddress, (uint32_t)syscallTarget);
-				//*syscallAddress = (uint32_t)syscallTarget;
+				DCWrite8(index+0x33, 0x7C);
+				syscall_max_patched = true;
 			}
+			
 			else
 			{
-				//search the next 0x1000 bytes for the correct offset
-				int i;
-				for (i = 0; i < 0x400; i++)
+				uint8_t pattern[2] = {0xe3,0x5a};
+				uint8_t* address = index;
+				for (;address < index+0x100; address++)
 				{
-					syscallAddress = (uint32_t*)(index+0x70)+i;
-					if (*syscallAddress == (uint32_t)ios.syscallBase)
+					if (!memcmp(pattern,address,2))
 					{
-						DCWrite32(syscallAddress, (uint32_t)syscallTarget);
-						//*syscallAddress = (uint32_t)syscallTarget;
+						DCWrite8(address+3,0x7C);
+						syscall_max_patched = true;
 						break;
 					}
 				}
 			}
-			//syscall stack arg counts is at offset 0x48
-			offset = (*(uint16_t*)(index+0x4A) && 0x0fff) + 0x8;
-			add = !!(*(uint32_t*)(index+0x48) && 0x02000000);
+			if (!syscall_max_patched)
+			{
+				return -4; // Error: max syscall index patch failed
+			}
+			//load stack arg counts is at offset 0x48
+			offset = (*(uint16_t*)(index+0x4A) & 0x0fff) + 0x8; //lower 16 bits
+			bool add = !!(*(uint32_t*)(index+0x48) & 0x02000000); //sign bit in instruction
 			uint32_t* stackAddress = (uint32_t*)(index+0x48 - offset + 2*add*offset);
+			bool stack_patched = false;
 			if (*stackAddress == stackArgsBase)
 			{
-				DCWrite32(stackAddress, (uint32_t)syscallTarget+0x7C*sizeof(uint32_t));
+				DCWrite32(stackAddress, stackBuffer);
+				stack_patched = true;
 				//*stackAddress = (uint32_t)(syscallTarget+0x7C*sizeof(uint32_t));
 			}
 			else
@@ -131,18 +235,29 @@ void __PatchSyscalls()
 					stackAddress = (uint32_t*)(index+0x70)+i;
 					if (*stackAddress == stackArgsBase)
 					{
-						DCWrite32(stackAddress, (uint32_t)syscallTarget+0x7C*sizeof(uint32_t));
+						DCWrite32(stackAddress, stackBuffer);
+						stack_patched = true;
 						//*stackAddress = (uint32_t)(syscallTarget+0x7C*sizeof(uint32_t));
 						break;
 					}
 				}
 			}
-			//alternatively only move the stack args table, the two new syscall addresses can then be directly appended to the original table
+			
+			
+			//optionally patch arbitrary syscalls to load a new IOS kernel to a custom handler
 
-			//optionally patch all syscalls to load a new IOS kernel to a custom handler
-			break;
+			// If we reached here, check if all patches succeeded
+			if (!stack_patched)
+			{
+				return -5; // Error: stack address not found or patch failed
+			}
+
+			return 0; // Success - all patches applied
 		}
 	}
+
+	// If we get here, syscall handler pattern was not found
+	return -3; // Error: syscall handler pattern not found
 	
 }
 
@@ -318,11 +433,80 @@ s32 __MLoad_System(void)
 	/* Detect modules and patch swi vector */
 	s32 result = IOS_PatchModules(moduleDetectors, sizeof(moduleDetectors));
 	//apply HAI-IOS patches when HAI parameters are detected
-	const uint8_t* HAI_ADDRESS = (uint8_t*)0xfffff000;
+	const uint8_t* HAI_ADDRESS = (uint8_t*)HAI_MAGIC_ADDRESS;
 	uint8_t magic[4] = {'H','A','I',0x00};
 	if (!memcmp(HAI_ADDRESS,magic,4))
 	{
-		__PatchSyscalls();
+		hai_patch_result = __PatchSyscalls();
+	}
+	//patch os_load_rm to work with any UID
+	uint8_t pattern[10] = {0xf7,0xff,0xf8,0x43,0x28,0x00,0xd0,0x0a,0x1c,0x2e};
+	uint8_t* kernelBase = (uint8_t*)0xffff0000;
+	for (; kernelBase < (uint8_t*)0xffffa000; kernelBase++)
+	{
+		if (!memcmp(kernelBase,pattern,10))
+		{
+			//replace 0xd0 with 0xe0
+			DCWrite8(kernelBase+6,0xe0);
+			break;
+		}
+	}
+	//include patches that are normally applied by Riivolution
+	//patch sd load
+	const u8 sd_old[] = {0x22, 0xf4, 0x00, 0x52, 0x18, 0x81, 0x27, 0xf0, 0x00, 0x7f, 0x19, 0xf3, 0x88, 0x0a, 0x88, 0x1b, 0x42, 0x9a};
+	for (kernelBase = (uint8_t*)0xffff0000; kernelBase < (uint8_t*)0xffffa000; kernelBase++)
+	{
+		if (!memcmp(kernelBase, sd_old, sizeof(sd_old)))
+		{
+			DCWrite16(kernelBase+16,0x2A04);
+			break;
+		}
+	}
+	//patch gpio_stm
+	static const u8 gpio_orig[8] =  {0xD1, 0x0F, 0x28, 0xFC, 0xD0, 0x33, 0x28, 0xFC};
+	static const u8 gpio_orig2[8] = {0xD1, 0x3D, 0x23, 0x89, 0x00, 0x9B, 0x42, 0x98};
+	for (kernelBase = (uint8_t*)0xffff0000; kernelBase < (uint8_t*)0xffffa000; kernelBase++)
+	{
+		if (!memcmp(kernelBase, gpio_orig, sizeof(gpio_orig)) || !memcmp(kernelBase, gpio_orig2, sizeof(gpio_orig2)))
+		{
+			DCWrite16(kernelBase,0x46C0);
+			break;
+		}
+	}
+	//patch prng permissions
+	const u16 prng_perms[14] = {0x2005, 0x2103, 0x47A0, 0x2800, 0xD1D3, 0x2006, 0x2103, 0x47A0,
+								0x2800, 0xD1CE, 0x200B, 0x2103, 0x47A0, 0x2800};
+	for (kernelBase = (uint8_t*)0xffff0000; kernelBase < (uint8_t*)0xffffa000; kernelBase++)
+	{
+		if (!memcmp(kernelBase, prng_perms, sizeof(prng_perms)))
+		{
+			DCWrite16(kernelBase+2, ((uint16_t*)kernelBase)[1] | 0x40); // give EHCI pid access to PRNG key
+			break;
+		}
+	}
+	//patch fs redirect (not a kernel patch)
+	bool replaceMain = false;
+	bool replaceFlash = false;
+	uint8_t* fsBase;
+	for (fsBase = (uint8_t*)0x20000000; fsBase < (uint8_t*)0x20010000; fsBase++)
+	{
+		if (replaceMain && replaceFlash)
+		{
+			break;
+		}
+		if (!replaceMain && !memcmp(fsBase, old_dev_fs_main, sizeof(old_dev_fs_main)))
+		{
+		    memcpy(fsBase, new_dev_fs_main, sizeof(new_dev_fs_main));
+			DCFlushRange(fsBase,sizeof(new_dev_fs_main));
+		    replaceMain = true;
+		}
+
+		else if (!replaceFlash && !memcmp(fsBase, old_dev_fs_open_flash, sizeof(old_dev_fs_open_flash)))
+		{
+		    memcpy(fsBase, new_dev_fs_open_flash, sizeof(new_dev_fs_open_flash));
+			DCFlushRange(fsBase,sizeof(new_dev_fs_open_flash));
+		    replaceFlash = true;
+		}
 	}
 	return result;
 }
@@ -376,6 +560,7 @@ static s32 __MLoad_Initialize(u32 *queuehandle)
 }
 
 
+
 int main(void)
 {
 	u32 queuehandle;
@@ -403,6 +588,57 @@ int main(void)
 	ret = __MLoad_Initialize(&queuehandle);
 	if (ret < 0)
 		return ret;
+
+	/* Log HAI patch results */
+	s32 file = os_open("/cios/log.txt", 0x02);
+	s32 test = os_open("/cios/test.txt", 0x02);
+	os_close(test);
+
+	char* logMessage = NULL;
+	switch (hai_patch_result)
+	{
+		case 0:
+			logMessage = "MLOAD: SUCCESS -> HAI patches applied successfully\n";
+			break;
+		case -1:
+			logMessage = "MLOAD: ERROR -> HAI: stackBuffer memcpy failed\n";
+			break;
+		case -2:
+			logMessage = "MLOAD: ERROR -> HAI: ios.syscallBase is 0\n";
+			break;
+		case -3:
+			logMessage = "MLOAD: ERROR -> HAI: syscall handler pattern not found\n";
+			break;
+		case -4:
+			logMessage = "MLOAD: ERROR -> HAI: max syscall index patch failed\n";
+			break;
+		case -5:
+			logMessage = "MLOAD: ERROR -> HAI: stack address not found or patch failed\n";
+			break;
+		default:
+			// HAI parameters were not detected, no log needed
+			break;
+	}
+
+	if (logMessage)
+	{
+		os_write(file, logMessage, strlen(logMessage));
+	}
+
+	os_close(file);
+
+	/* Load in the appropriate OH1 module */
+	/*
+	if (hai_patch_result == 0)
+	{
+		os_launch_rm("/cios/OH1_HAI.app");
+	}
+	else
+	{
+		os_launch_rm("/cios/OH1.app");
+	}
+	*/
+	
 
 	/* Main loop */
 	while (1) {

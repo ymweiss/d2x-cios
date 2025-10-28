@@ -50,9 +50,7 @@ OBJS	=	debug.o		\
 $(TARGET).elf: $(OBJS) $(LIBS)
 	@echo -e " LD\t$@"
 	@$(LD) $(LDFLAGS) $(OBJS) $(LIBS) -lgcc -o $@.orig
-	@$(STRIP) $@.orig $@
-	
-# strip $(SADDR)
+	@$(STRIP) $@.orig $@ strip $(SADDR)
 
 %.o: %.s
 	@echo -e " CC\t$@"
