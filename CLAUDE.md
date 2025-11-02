@@ -51,6 +51,8 @@ The devkitARM r32 toolchain is no longer available from official sources. This r
 
 **The pre-commit hook will automatically build the Docker image if it doesn't exist.**
 
+**Important:** The Docker image build is a **lengthy one-time process** (15-30 minutes) that compiles the entire devkitARM r32 toolchain from source. Once built, the image is **cached by Docker** and subsequent commits will use the cached image instantly.
+
 To manually build the image:
 
 1. **Initialize the submodule (if not already done):**
