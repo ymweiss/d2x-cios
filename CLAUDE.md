@@ -47,18 +47,36 @@ Using newer toolchain versions will cause compilation errors and runtime failure
 
 ### Build devkitARM r32 Container
 
-The devkitARM r32 toolchain is no longer available from official sources. Use the community-maintained Docker setup:
+The devkitARM r32 toolchain is no longer available from official sources. This repository includes the Dockerfile repository as a git submodule.
 
-1. **Clone the devkitARM r32 repository:**
+**The pre-commit hook will automatically build the Docker image if it doesn't exist.**
+
+To manually build the image:
+
+1. **Initialize the submodule (if not already done):**
    ```bash
-   git clone https://github.com/Leseratte10/compile-devkitARM-r32.git
-   cd compile-devkitARM-r32
+   git submodule update --init --recursive
    ```
 
 2. **Build the Docker image:**
    ```bash
-   docker build -t devkitarm-r32 .
+   # Default: Ubuntu Focal (20.04 LTS)
+   docker build -t devkitarm-r32 docker/devkitarm-r32/Dockerfiles/ubuntufocal
+
+   # Or choose a different distribution:
+   docker build -t devkitarm-r32 docker/devkitarm-r32/Dockerfiles/debianbullseye
+   docker build -t devkitarm-r32 docker/devkitarm-r32/Dockerfiles/ubuntujammy
    ```
+
+   Available distributions:
+   - Debian: squeeze, wheezy, jessie, stretch, buster, bullseye
+   - Ubuntu: xenial, bionic, focal, hirsute, impish, jammy
+
+3. **Configure distribution for pre-commit hook (optional):**
+   ```bash
+   export DEVKITARM_R32_DISTRO=debianbullseye  # or any other distro
+   ```
+
    This creates a container with devkitARM r32 installed at `/opt/devkitARM`.
 
 ### Build d2x cIOS Using Docker
@@ -119,18 +137,28 @@ This repository includes a pre-commit hook that automatically verifies the build
 **Location:** `.git/hooks/pre-commit`
 
 The hook will:
-1. Check if Docker and devkitarm-r32 image are available
-2. Build d2x-cios with a test version number
-3. Block the commit if build fails
-4. Clean up build artifacts after verification
+1. Check if Docker is available
+2. Check if devkitarm-r32 image exists, and build it automatically if not
+   - Initializes the submodule if needed
+   - Builds from `docker/devkitarm-r32/Dockerfiles/ubuntufocal` by default
+   - Respects `DEVKITARM_R32_DISTRO` environment variable for choosing a different distribution
+3. Build d2x-cios with a test version number
+4. Block the commit if build fails
+5. Clean up build artifacts after verification
 
 **To skip the check** (not recommended):
 ```bash
 git commit --no-verify
 ```
 
+**To use a different distribution for the Docker build:**
+```bash
+export DEVKITARM_R32_DISTRO=debianbullseye
+git commit
+```
+
 **First-time setup:**
-The pre-commit hook is automatically installed when you clone the repository. No additional setup needed.
+The pre-commit hook is automatically installed when you clone the repository. The devkitARM r32 Docker image will be built automatically on first commit.
 
 ## Build Output
 
