@@ -1,23 +1,35 @@
 #!/bin/bash
 # build-wad.sh - Build d2x cIOS WAD from built modules using WiiPy
 #
-# Usage: ./build-wad.sh [base_ios] [slot] [version] [platform]
+# Usage: ./build-wad.sh [base_ios] [slot] [version] [platform] [--no-ohci]
 #   base_ios: Base IOS number (37, 38, 53, 55, 56, 57, 58, 60, 70, 80) - default: 56
 #   slot:     Installation slot (3-255) - default: 249
 #   version:  cIOS version (1-65535) - default: 21999
 #   platform: Target platform (wii or vwii) - default: wii
+#   --no-ohci: Replace stock OHCI module with EHCI (saves space)
 #
 # Examples:
-#   ./build-wad.sh 56 249 21999 wii    # Build for Wii using IOS56
-#   ./build-wad.sh 58 249 21999 vwii   # Build for vWii using IOS58
+#   ./build-wad.sh 56 249 21999 wii              # Build with both OHCI + EHCI
+#   ./build-wad.sh 58 249 21999 vwii --no-ohci  # Build vWii, EHCI replaces OHCI
+#   ./build-wad.sh 56 249 21999 wii --no-ohci   # Build Wii, EHCI replaces OHCI
 
 set -e
 
-# Configuration
+# Parse arguments
 BASE_IOS="${1:-56}"
 SLOT="${2:-249}"
 VERSION="${3:-21999}"
 PLATFORM="${4:-wii}"
+NO_OHCI=false
+
+# Check for --no-ohci flag in any position
+for arg in "$@"; do
+    if [ "$arg" = "--no-ohci" ]; then
+        NO_OHCI=true
+        break
+    fi
+done
+
 CIOS_NAME="d2x-v999-test-build"
 
 # Paths
@@ -65,6 +77,21 @@ else
     NUS_FLAGS="--wii"  # Use original Wii endpoint
 fi
 
+# If --no-ohci specified, create modified ciosmaps with EHCI replacing OHCI
+if [ "$NO_OHCI" = true ]; then
+    TEMP_CIOSMAPS="/tmp/ciosmaps-no-ohci-$$.xml"
+
+    # Modify ciosmaps to change EHCI content ID to 0x3 (OHCI's slot)
+    # This makes EHCI replace OHCI instead of being added as new content
+    sed 's/\(<content id="0x[0-9a-f]*" module="EHCI"\)/\<content id="0x3" module="EHCI"/' \
+        "$CIOSMAPS_FILE" > "$TEMP_CIOSMAPS"
+
+    CIOSMAPS_FILE="$TEMP_CIOSMAPS"
+
+    # Register cleanup on exit
+    trap "rm -f $TEMP_CIOSMAPS" EXIT
+fi
+
 # Determine base IOS version from ciosmaps.xml based on platform
 if [ "$PLATFORM" = "vwii" ]; then
     case "$BASE_IOS" in
@@ -106,7 +133,7 @@ echo "Base IOS:    IOS${BASE_IOS} v${BASE_VERSION}"
 echo "Target Slot: ${SLOT}"
 echo "Version:     ${VERSION}"
 echo "cIOS Name:   ${CIOS_NAME}"
-echo "cIOS Maps:   $(basename $CIOSMAPS_FILE)"
+echo "OHCI Module: $([ "$NO_OHCI" = true ] && echo "Excluded (EHCI replaces OHCI)" || echo "Included (OHCI + EHCI)")"
 echo "Output:      ${OUTPUT_WAD}"
 echo "========================================="
 
@@ -118,12 +145,12 @@ if [ ! -f "$BASE_WAD" ]; then
     echo "Downloading from NUS ($([ "$PLATFORM" = "vwii" ] && echo "Wii U endpoint" || echo "Wii endpoint"))..."
 
     # Build title ID for IOS
-    # Wii:  0000000100000000 + IOS number in hex
-    # vWii: 0000000700000000 + IOS number in hex
+    # Wii:  0000000100000000 + IOS number in hex (padded to 4 hex digits)
+    # vWii: 0000000700000000 + IOS number in hex (padded to 4 hex digits)
     if [ "$PLATFORM" = "vwii" ]; then
-        TID=$(printf "00000007000000%02X" "$BASE_IOS")
+        TID=$(printf "00000007%08X" "$BASE_IOS")
     else
-        TID=$(printf "0000000100000%02X" "$BASE_IOS")
+        TID=$(printf "00000001%08X" "$BASE_IOS")
     fi
 
     cd "$WIIPY_DIR"

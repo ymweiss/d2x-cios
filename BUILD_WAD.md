@@ -20,7 +20,7 @@ After building d2x cIOS modules with `maked2x.sh`, you can package them into ins
 ## Usage
 
 ```bash
-./build-wad.sh [base_ios] [slot] [version] [platform]
+./build-wad.sh [base_ios] [slot] [version] [platform] [--no-ohci]
 ```
 
 ### Parameters
@@ -34,6 +34,10 @@ After building d2x cIOS modules with `maked2x.sh`, you can package them into ins
 - **platform**: Target platform (default: wii)
   - `wii` - Original Nintendo Wii
   - `vwii` - Wii U virtual Wii mode
+- **--no-ohci**: (optional) Replace stock OHCI module with EHCI
+  - Removes USB 1.1 OHCI support, keeps only USB 2.0 EHCI
+  - Slightly reduces WAD size
+  - Recommended for modern USB devices (all support USB 2.0)
 
 ### Examples
 
@@ -44,8 +48,11 @@ After building d2x cIOS modules with `maked2x.sh`, you can package them into ins
 # Build for vWii using IOS58 base, install to slot 249
 ./build-wad.sh 58 249 21999 vwii
 
-# Build for Wii using IOS57 base, install to slot 250
-./build-wad.sh 57 250 21999 wii
+# Build for Wii using IOS57 base, install to slot 250, no OHCI
+./build-wad.sh 57 250 21999 wii --no-ohci
+
+# Build for vWii without OHCI module (EHCI only)
+./build-wad.sh 58 249 21999 vwii --no-ohci
 
 # Use defaults (IOS56, slot 249, v21999, wii platform)
 ./build-wad.sh
@@ -126,18 +133,46 @@ Standard d2x cIOS setup uses these slots:
 For vWii, typically use:
 - **Slot 249**: IOS58 base
 
-## Module Exclusion (Future)
+## OHCI Module Replacement
 
-Currently, the script includes **all modules**:
-- MLOAD - Module loader
+### Default Behavior (OHCI + EHCI)
+
+By default, the script includes both USB modules:
+- **OHCI** - USB 1.1 support (stock module at content ID 3)
+- **EHCI** - USB 2.0 support (d2x custom module)
+
+### --no-ohci Flag (Runtime OHCI Selection)
+
+When `--no-ohci` is specified:
+- **EHCI replaces OHCI** at content ID 3 in the WAD
+- Stock OHCI module is removed from the static installation
+- **mload gains runtime flexibility** to decide which OHCI to load:
+  - If system call modifications succeed → Load custom HAI-IOS OHCI version
+  - If system call modifications fail → Load stock OHCI module
+- Enables advanced IOS customization workflows
+
+**Technical Implementation:**
+- The script modifies the ciosmaps XML to change EHCI's content ID from its normal value (e.g., `0x25`, `0x11`) to `0x3` (OHCI's slot)
+- WiiPy replaces content 3 (OHCI) with EHCI instead of adding EHCI as a new content
+- No content ID gaps are created (content IDs don't need to be sequential)
+- mload can then dynamically load OHCI modules at runtime based on system state
+
+**Use Case:**
+- Advanced homebrew development requiring custom IOS modifications
+- HAI-Riivolution or similar projects that patch IOS at runtime
+- Allows fallback to stock OHCI if custom modifications fail
+- Provides flexibility without requiring separate cIOS installations
+
+### All Included Modules
+
+The WAD includes these d2x custom modules:
+- MLOAD - Module loader (enables runtime module loading)
 - FAT - FAT filesystem support
-- EHCI - USB 2.0 support
+- EHCI - USB 2.0 Enhanced Host Controller Interface
 - DIPP - Disc interface plugin
 - ES - ES signature patching
 - FFSP - File system plugin
 - USBS - USB storage driver
-
-**Future enhancement**: Option to exclude stock OHCI module to save space.
 
 ## Troubleshooting
 
