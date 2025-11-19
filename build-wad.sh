@@ -81,11 +81,25 @@ fi
 if [ "$NO_OHCI" = true ]; then
     TEMP_CIOSMAPS="/tmp/ciosmaps-no-ohci-$$.xml"
 
-    # Modify ciosmaps to change EHCI content ID to 0x3 (OHCI's slot)
-    # This makes EHCI replace OHCI instead of being added as new content
-    sed 's/\(<content id="0x[0-9a-f]*" module="EHCI"\)/\<content id="0x3" module="EHCI"/' \
-        "$CIOSMAPS_FILE" > "$TEMP_CIOSMAPS"
+    # Modify ciosmaps to:
+    # 1. Remove the original content ID 0x3 entry (stock OHCI)
+    # 2. Change EHCI content ID to 0x3 (EHCI replaces OHCI)
+    # 3. Decrease contentscount by 1 (one less native module)
+    sed -e '/^\s*<content id="0x3" \/>\s*$/d' \
+        -e 's/\(<content id="0x[0-9a-f]*" module="EHCI"\)/\<content id="0x3" module="EHCI"/' \
+        -e 's/contentscount="\([0-9]*\)"/contentscount="$((\1-1))"/' \
+        "$CIOSMAPS_FILE" > "$TEMP_CIOSMAPS.tmp"
 
+    # Evaluate the arithmetic expressions in contentscount
+    awk '{
+        if (match($0, /contentscount="\$\(\(([0-9]+)-1\)\)"/, arr)) {
+            newcount = arr[1] - 1
+            sub(/contentscount="\$\(\([0-9]+-1\)\)"/, "contentscount=\"" newcount "\"")
+        }
+        print
+    }' "$TEMP_CIOSMAPS.tmp" > "$TEMP_CIOSMAPS"
+
+    rm -f "$TEMP_CIOSMAPS.tmp"
     CIOSMAPS_FILE="$TEMP_CIOSMAPS"
 
     # Register cleanup on exit

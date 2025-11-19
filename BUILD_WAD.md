@@ -141,9 +141,11 @@ By default, the script includes both USB modules:
 - **OHCI** - USB 1.1 support (stock module at content ID 3)
 - **EHCI** - USB 2.0 support (d2x custom module)
 
-### --no-ohci Flag (Runtime OHCI Selection)
+### --no-ohci Flag (Runtime OHCI Selection - vWii Only)
 
-When `--no-ohci` is specified:
+**IMPORTANT: This flag is only relevant for vWii builds. Do not use with standard Wii.**
+
+When `--no-ohci` is specified for vWii:
 - **EHCI replaces OHCI** at content ID 3 in the WAD
 - Stock OHCI module is removed from the static installation
 - **mload gains runtime flexibility** to decide which OHCI to load:
@@ -152,14 +154,16 @@ When `--no-ohci` is specified:
 - Enables advanced IOS customization workflows
 
 **Technical Implementation:**
-- The script modifies the ciosmaps XML to change EHCI's content ID from its normal value (e.g., `0x25`, `0x11`) to `0x3` (OHCI's slot)
-- WiiPy replaces content 3 (OHCI) with EHCI instead of adding EHCI as a new content
-- No content ID gaps are created (content IDs don't need to be sequential)
+- The script removes `<content id="0x3" />` from ciosmaps XML
+- EHCI module has `tmdmoduleid="3"` which tells it to occupy TMD index 3
+- WiiPy replaces content 3 (OHCI) with EHCI using the modified cIOS builder
+- When `existing_cid == cid`, WiiPy performs replacement instead of adding both modules
+- Decreases `contentscount` by 1 (one less native module)
 - mload can then dynamically load OHCI modules at runtime based on system state
 
 **Use Case:**
-- Advanced homebrew development requiring custom IOS modifications
-- HAI-Riivolution or similar projects that patch IOS at runtime
+- **vWii-specific** advanced homebrew development requiring custom IOS modifications
+- HAI-Riivolution or similar projects that patch IOS at runtime on vWii
 - Allows fallback to stock OHCI if custom modifications fail
 - Provides flexibility without requiring separate cIOS installations
 
